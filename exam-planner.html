@@ -6154,6 +6154,8 @@ const UPDATE_REPO='kkaltoe-ssam/exam-planner';   // GitHub '사용자/저장소'
 // raw.githubusercontent(몇 분 안에 바뀜) 먼저, 막힌 학교망이면 jsDelivr(조금 늦게 바뀜)
 const UPDATE_BASES=[`https://raw.githubusercontent.com/${UPDATE_REPO}/main/`,`https://cdn.jsdelivr.net/gh/${UPDATE_REPO}@main/`];
 let updBase='';
+// 버전 뒤 조사: 끝 숫자 읽기(2·4·5·9 → 가, 나머지 → 이)
+function iga(v){ const d=String(v).slice(-1); return '2459'.includes(d)?'가':'이'; }
 function verNum(v){ return String(v||'').replace(/^v/i,'').split('.').map(x=>parseInt(x,10)||0); }
 function verNewer(a,b){ const x=verNum(a), y=verNum(b); for(let i=0;i<Math.max(x.length,y.length);i++){ const p=x[i]||0, q=y[i]||0; if(p!==q) return p>q; } return false; }
 function updPref(k,v){ try{ if(v===undefined) return localStorage.getItem('examPlanner.'+k); localStorage.setItem('examPlanner.'+k,v); }catch(e){ return null; } }
@@ -6181,7 +6183,7 @@ async function checkUpdate(manual){
   if(!manual && updPref('updates')==='off') return;
   const j=await fetchLatest();
   if(!j){ if(manual) toast('새 버전을 확인하지 못했어요. 인터넷에 연결돼 있는지 확인해 주세요.',4500); return; }
-  if(!verNewer(j.version,APP_VERSION)){ if(manual) toast(`지금 쓰는 <b>${esc(APP_VERSION)}</b>이 최신 버전이에요.`); return; }
+  if(!verNewer(j.version,APP_VERSION)){ if(manual) toast(`지금 쓰는 <b>${esc(APP_VERSION)}</b>${iga(APP_VERSION)} 최신 버전이에요.`); return; }
   if(!manual && updPref('skipVer')===String(j.version)) return;
   showUpdateBar(j); }
 function safeUrl(u){ u=String(u||''); return /^https:\/\//i.test(u)?u:''; }
@@ -6189,7 +6191,7 @@ function showUpdateBar(j){
   const old=document.getElementById('updBar'); if(old) old.remove();
   const pg=safeUrl(j.page);
   const bar=document.createElement('div'); bar.id='updBar'; bar.className='updbar noprint'; bar.setAttribute('role','status');
-  bar.innerHTML=`<span class="updic" aria-hidden="true">🔔</span><span class="updtx">새 버전 <b>${esc(j.version)}</b>이 나왔어요${j.date?` <span class="upddt">(${esc(j.date)})</span>`:''} · 지금은 ${esc(APP_VERSION)}</span>
+  bar.innerHTML=`<span class="updic" aria-hidden="true">🔔</span><span class="updtx">새 버전 <b>${esc(j.version)}</b>${iga(j.version)} 나왔어요${j.date?` <span class="upddt">(${esc(j.date)})</span>`:''} · 지금은 ${esc(APP_VERSION)}</span>
     <span class="updbtns">${(j.notes&&j.notes.length)?'<button type="button" class="btn sm" id="updNotes">바뀐 점</button>':''}<button type="button" class="btn sm primary" id="updGet">새 버전 받기</button><button type="button" class="btn sm" id="updLater">나중에</button></span>`;
   document.body.prepend(bar);
   const n=document.getElementById('updNotes'); if(n) n.onclick=()=>askModal({title:`${esc(j.version)}에서 바뀐 점`,
