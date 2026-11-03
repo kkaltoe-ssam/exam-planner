@@ -4,8 +4,9 @@
 
 ## 받기
 
-**[최신 버전 받기 (exam-planner.html)](https://github.com/kkaltoe-ssam/exam-planner/releases/latest/download/exam-planner.html)**
+**[최신 버전 받기 (exam-planner.html)](https://github.com/kkaltoe-ssam/exam-planner/blob/main/exam-planner.html)** → 열린 화면 오른쪽 위의 **⬇ (Download raw file)** 단추를 누르세요.
 
+- 이미 도우미를 쓰고 있다면, 새 버전이 나왔을 때 화면 맨 위 알림 줄의 **새 버전 받기**로 바로 받을 수 있어요.
 - 받은 파일을 크롬·엣지에서 열면 돼요. 설치할 것이 없고, 인터넷 없이도 돌아가요.
 - 인터넷에 연결된 컴퓨터에서 열면 새 버전이 나왔는지 확인해 화면 맨 위에 알려 줘요.
 - 하던 작업은 **작업 저장**으로 파일에 저장해 두었다가, 새 버전 파일에서 **작업 불러오기**로 이어서 하세요.
@@ -20,7 +21,7 @@
 
 | 파일 | 내용 |
 |---|---|
-| `exam-planner.html` | 도우미 최신판 (릴리스에도 같은 파일이 붙어 있어요) |
+| `exam-planner.html` | 도우미 최신판 |
 | `version.json` | 최신 버전 번호와 바뀐 점 — 도우미가 새 버전 알림에 씀 |
 
 여러분의 칼퇴를 응원하는 칼퇴쌤

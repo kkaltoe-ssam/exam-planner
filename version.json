@@ -7,6 +7,6 @@
     "공유 링크로 연 화면에서 파일을 못 받을 때 「새 창에서 도우미 열기」를 안내합니다.",
     "감독 참고표 맨 아래 줄이 교시마다 응시 학생이 있는 ‘시험실 수’로 바뀌었습니다."
   ],
-  "download": "https://github.com/kkaltoe-ssam/exam-planner/releases/latest/download/exam-planner.html",
-  "page": "https://github.com/kkaltoe-ssam/exam-planner"
+  "page": "https://github.com/kkaltoe-ssam/exam-planner",
+  "file": "exam-planner.html"
 }
