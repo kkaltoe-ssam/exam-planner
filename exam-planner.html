@@ -1097,6 +1097,10 @@ ol.qmsteps li,ul.qmlist li{margin:3px 0;}
 .updlist{margin:0;padding-left:20px;line-height:1.6;}
 html.skin-kt .updbar{background:var(--kt-cream,#FDF3D2);border-bottom-color:var(--kt-yellow,#FFD54A);}
 @media print{ .updbar{display:none!important;} }
+
+.tthol{display:inline-block;margin-left:4px;padding:0 6px;border-radius:999px;background:#FDE8E8;color:#B42318;font-size:11px;font-weight:700;vertical-align:1px;}
+input.ttdate.hol{border-color:#E5484D;color:#B42318;}
+@media print{ .tthol{background:none;border:1px solid #B42318;} }
 </style>
 </head>
 <body>
@@ -2977,7 +2981,7 @@ function emptyCommon(){ const o={}; GIDS.forEach(g=>{ o[g]={'1':{whole:[],byClas
 function defaultCfg(){ return {
   v:2, schoolName:'', level:'high', idFormat:'5',
   rounds:['1차 정기시험','2차 정기시험'],
-  periodsPerDay:3, skipWeekend:true,
+  periodsPerDay:3, skipWeekend:true, skipHoliday:true, schoolOff:[],
   gradeColors:Object.assign({},GRADE_COLOR_DEFAULT),
   semAll:{'1':false,'2':false,'3':false},
   common:emptyCommon(),
@@ -3002,6 +3006,8 @@ function normCfg(c){
   o.rounds=(Array.isArray(c.rounds)&&c.rounds.length?c.rounds:defaultCfg().rounds).map(x=>String(x==null?'':x).trim()||'정기시험').slice(0,4);
   o.periodsPerDay=Math.min(6,Math.max(1,parseInt(c.periodsPerDay)||3));
   o.skipWeekend=(c.skipWeekend!==false);
+  o.skipHoliday=(c.skipHoliday!==false);
+  o.schoolOff=(Array.isArray(c.schoolOff)?c.schoolOff:[]).map(x=>typeof x==='string'?{d:x,n:''}:{d:String((x&&x.d)||''),n:String((x&&x.n)||'').slice(0,20)}).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.d)).slice(0,100);
   o.gradeColors=Object.assign({},GRADE_COLOR_DEFAULT,c.gradeColors||{});
   o.semAll=Object.assign({'1':false,'2':false,'3':false},c.semAll||{});
   { const r=c.ttRules||{}; const arr=x=>Array.isArray(x)?[...new Set(x.map(String))]:[];
@@ -4299,18 +4305,43 @@ function runAutoAll(){ shownGrades().forEach(g=>{ const subs=gExamSubjects(g,ttS
     const self=(CFG.ttRules.fillSelf&&subs.length)?Array.from({length:all},(_,i)=>i).filter(i=>!used.has(i)):((prev&&prev.self)||[]).filter(i=>!used.has(i));
     store[g].tt[ttKeyStr()]={days:ttDays,ppd:PPD(),assign,self}; }); stuGrades().forEach(g=>gTT(g)); ttSel=undefined; markDirty(); drawTT(); }
 function ttDateKey(d){ return ttSem+'-'+ttRound+'-'+d; }
-function ttDayHeadHtml(d){ const v=examDates[ttDateKey(d)]||''; const md=v?mmdd(v):'';
-  return `${d+1}일차${md?` <span style="color:var(--ink2);font-weight:700">(${md}${v?' '+dowKo(v):''})</span>`:''}<br><input type="date" class="ttdate" data-day="${d}" value="${v}" title="날짜를 넣으면 뒤 일차도 이어서 채워요${CFG.skipWeekend?'(주말은 건너뜀)':''}" aria-label="${d+1}일차 날짜">`; }
+// ----- 공휴일·학교 쉬는 날 (인터넷 없이 쓰도록 표로 넣어 둠: 2025~2030년, 대체공휴일·선거일·임시공휴일 포함) -----
+const KR_HOLIDAYS={"2025-01-01":"신정","2025-01-27":"임시공휴일","2025-01-28":"설날 전날","2025-01-29":"설날","2025-01-30":"설날 다음날","2025-03-01":"삼일절","2025-03-03":"삼일절 대체 휴일","2025-05-05":"부처님오신날·어린이날","2025-05-06":"부처님오신날 대체 휴일·어린이날 대체 휴일","2025-06-03":"대통령 선거일","2025-06-06":"현충일","2025-08-15":"광복절","2025-10-03":"개천절","2025-10-05":"추석 전날","2025-10-06":"추석","2025-10-07":"추석 다음날","2025-10-08":"추석 대체 휴일","2025-10-09":"한글날","2025-12-25":"성탄절","2026-01-01":"신정","2026-02-16":"설날 전날","2026-02-17":"설날","2026-02-18":"설날 다음날","2026-03-01":"삼일절","2026-03-02":"삼일절 대체 휴일","2026-05-01":"노동절","2026-05-05":"어린이날","2026-05-24":"부처님오신날","2026-05-25":"부처님오신날 대체 휴일","2026-06-03":"지방선거일","2026-06-06":"현충일","2026-07-17":"제헌절","2026-08-15":"광복절","2026-08-17":"광복절 대체 휴일","2026-09-24":"추석 전날","2026-09-25":"추석","2026-09-26":"추석 다음날","2026-10-03":"개천절","2026-10-05":"개천절 대체 휴일","2026-10-09":"한글날","2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 전날","2027-02-07":"설날","2027-02-08":"설날 다음날","2027-02-09":"설날 대체 휴일","2027-03-01":"삼일절","2027-05-01":"노동절","2027-05-03":"노동절 대체 휴일","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-07-19":"제헌절 대체 휴일","2027-08-15":"광복절","2027-08-16":"광복절 대체 휴일","2027-09-14":"추석 전날","2027-09-15":"추석","2027-09-16":"추석 다음날","2027-10-03":"개천절","2027-10-04":"개천절 대체 휴일","2027-10-09":"한글날","2027-10-11":"한글날 대체 휴일","2027-12-25":"성탄절","2027-12-27":"기독탄신일 대체 휴일","2028-01-01":"신정","2028-01-26":"설날 전날","2028-01-27":"설날","2028-01-28":"설날 다음날","2028-03-01":"삼일절","2028-04-12":"국회의원 선거일","2028-05-01":"노동절","2028-05-02":"부처님오신날","2028-05-05":"어린이날","2028-06-06":"현충일","2028-07-17":"제헌절","2028-08-15":"광복절","2028-10-02":"추석 전날","2028-10-03":"개천절·추석","2028-10-04":"추석 다음날","2028-10-05":"추석 대체 휴일","2028-10-09":"한글날","2028-12-25":"성탄절","2029-01-01":"신정","2029-02-12":"설날 전날","2029-02-13":"설날","2029-02-14":"설날 다음날","2029-03-01":"삼일절","2029-05-01":"노동절","2029-05-05":"어린이날","2029-05-07":"어린이날 대체 휴일","2029-05-20":"부처님오신날","2029-05-21":"부처님오신날 대체 휴일","2029-06-06":"현충일","2029-07-17":"제헌절","2029-08-15":"광복절","2029-09-21":"추석 전날","2029-09-22":"추석","2029-09-23":"추석 다음날","2029-09-24":"추석 대체 휴일","2029-10-03":"개천절","2029-10-09":"한글날","2029-12-25":"성탄절","2030-01-01":"신정","2030-02-02":"설날 전날","2030-02-03":"설날","2030-02-04":"설날 다음날","2030-02-05":"설날 대체 휴일","2030-03-01":"삼일절","2030-05-01":"노동절","2030-05-05":"어린이날","2030-05-06":"어린이날 대체 휴일","2030-05-09":"부처님오신날","2030-06-06":"현충일","2030-07-17":"제헌절","2030-08-15":"광복절","2030-09-11":"추석 전날","2030-09-12":"추석","2030-09-13":"추석 다음날","2030-10-03":"개천절","2030-10-09":"한글날","2030-12-25":"성탄절"};
+// 숫자 뒤 은/는: 끝 숫자 읽기(2·4·5·9 → 는)
+function eunDigit(v){ return '2459'.includes(String(v).slice(-1))?'는':'은'; }
+function ymd(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
+function schoolOffName(dstr){ const x=(CFG.schoolOff||[]).find(o=>o.d===dstr); return x?(x.n||'학교 쉬는 날'):''; }
+function holidayName(dstr){ return schoolOffName(dstr)||(CFG.skipHoliday!==false?(KR_HOLIDAYS[dstr]||''):''); }
+function holidayOutOfTable(dstr){ const y=+String(dstr).slice(0,4); return y<2025||y>2030; }
+// 시험 날로 쓸 수 없는 날: 주말(설정) · 공휴일(설정) · 학교 쉬는 날
+function offDay(dt){ return (CFG.skipWeekend&&(dt.getDay()===0||dt.getDay()===6)) || !!holidayName(ymd(dt)); }
+function ttDayHeadHtml(d){ const v=examDates[ttDateKey(d)]||''; const md=v?mmdd(v):''; const hn=v?holidayName(v):''; const we=v&&CFG.skipWeekend&&/[토일]/.test(dowKo(v));
+  const skipTxt=[CFG.skipWeekend?'주말':'',CFG.skipHoliday!==false?'공휴일':'',(CFG.schoolOff||[]).length?'학교 쉬는 날':''].filter(Boolean).join('·');
+  return `${d+1}일차${md?` <span style="color:var(--ink2);font-weight:700">(${md}${v?' '+dowKo(v):''})</span>`:''}${hn?`<span class="tthol" title="이날은 ${esc(hn)}이에요">${esc(hn)}</span>`:(we?'<span class="tthol">주말</span>':'')}<br><input type="date" class="ttdate${hn||we?' hol':''}" data-day="${d}" value="${v}" title="날짜를 넣으면 뒤 일차도 이어서 채워요${skipTxt?'('+skipTxt+'은 건너뜀)':''}" aria-label="${d+1}일차 날짜">`; }
 function dowKo(dstr){ const p=String(dstr).split('-'); if(p.length<3) return ''; return ['일','월','화','수','목','금','토'][new Date(+p[0],+p[1]-1,+p[2]).getDay()]; }
+// '2026-12-24(재량휴업일), 2027.5.14 개교기념일, 12/31' → [{d,n}] (연도 없으면 올해)
+function parseSchoolOff(text){ const list=[], bad=[]; const yr=new Date().getFullYear();
+  String(text||'').split(/[,\n;]+/).map(t=>t.trim()).filter(Boolean).forEach(t=>{
+    const m=t.match(/^(?:(\d{4})\s*[-./년]\s*)?(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?\s*(?:[(（]\s*([^)）]*)\s*[)）]|\s+(.+))?$/);
+    if(!m){ bad.push(t); return; } const y=+(m[1]||yr), mo=+m[2], da=+m[3]; const dt=new Date(y,mo-1,da);
+    if(dt.getMonth()!==mo-1||dt.getDate()!==da){ bad.push(t); return; }
+    const d=ymd(dt); if(!list.some(x=>x.d===d)) list.push({d, n:String(m[4]||m[5]||'').trim().slice(0,20)}); });
+  list.sort((a,b)=>a.d<b.d?-1:1); return {list, bad}; }
 // 날짜 설정 시 그 일차부터 뒤 일차까지 연속 날짜로 자동 반영 (좌석 배치도 examDates에도 공유됨)
 function setExamDateCascade(d,val){
   if(!val){ delete examDates[ttDateKey(d)]; markDirty(); drawTT(); return; }
   const base=new Date(val+'T00:00:00'); if(isNaN(base.getTime()))return;
-  const nd=new Date(base.getTime());
+  const nd=new Date(base.getTime()); const skipped=[];
   for(let dd=d; dd<ttDays; dd++){
-    if(dd>d){ nd.setDate(nd.getDate()+1); if(CFG.skipWeekend){ while(nd.getDay()===0||nd.getDay()===6) nd.setDate(nd.getDate()+1); } }
-    examDates[ttSem+'-'+ttRound+'-'+dd]=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`; }
+    if(dd>d){ nd.setDate(nd.getDate()+1); let guard=0;
+      while(offDay(nd)&&guard++<60){ const hn=holidayName(ymd(nd)); if(hn) skipped.push(`${mmdd(ymd(nd))} ${hn}`); nd.setDate(nd.getDate()+1); } }
+    examDates[ttSem+'-'+ttRound+'-'+dd]=ymd(nd); }
   markDirty(); drawTT();
+  const first=holidayName(val); const fw=CFG.skipWeekend&&/[토일]/.test(dowKo(val));
+  const msgs=[]; if(first||fw) msgs.push(`<b>${mmdd(val)}</b>${eunDigit(mmdd(val))} ${first?esc(first):'주말'}이에요. 이 날로 둘까요? 다른 날이면 날짜를 다시 골라 주세요.`);
+  if(skipped.length) msgs.push(`뒤 일차는 쉬는 날을 건너뛰고 채웠어요 — ${skipped.map(esc).join(', ')}`);
+  const end=examDates[ttSem+'-'+ttRound+'-'+(ttDays-1)]; if(CFG.skipHoliday!==false&&(holidayOutOfTable(val)||(end&&holidayOutOfTable(end)))) msgs.push('2025~2030년이 아닌 날짜라 공휴일은 확인하지 못했어요. 학교 설정의 <b>학교 쉬는 날</b>에 넣어 주세요.');
+  if(msgs.length) toast(msgs.join('<br>'),7000);
 }
 // 좁은 시간표 칸에서 띄어쓰기 없는 긴 과목 이름('지구시스템과학')이 아무 데서나 잘리지 않게, 낱말 경계에 줄바꿈 자리를 넣음
 const TT_MORPH=['과학','탐구','문화','윤리','사회','지리','역사','기행','회화','실험','생활','영어','국어','수학','작문','독해','매체','언어','비평','감상','머신러닝','에너지','물질','대사','통계','시스템','데이터','한문','미래','관계','이해','통합','공통','심화','진로','경제','정보','프로그래밍'];
@@ -5707,7 +5738,10 @@ function renderSettings(app){
         <div class="row">${CFG.rounds.length<4?'<button type="button" class="btn sm" id="roundAdd">＋ 회차 추가</button>':''}<span class="note" style="margin:0">빠른 선택:</span><div class="presets">${ROUND_PRESETS.map((p,i)=>`<button type="button" class="btn" data-rpreset="${i}">${p.join(' · ')}</button>`).join('')}</div></div>
       </div></div>
       <div class="field"><div class="fl">하루 교시 수<small>시험 시간표의 줄 수</small></div><div class="fc"><div class="row"><select id="cfPpd">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===PPD()?'selected':''}>하루 ${n}교시</option>`).join('')}</select></div>${ttUsed?'<div class="hint">이미 짠 시간표가 있으면 같은 일차·교시로 옮겨요. 줄인 교시에 있던 과목은 미배치로 돌아가요.</div>':''}</div></div>
-      <div class="field"><div class="fl">날짜 이어 채우기</div><div class="fc"><label class="gchk"><input type="checkbox" id="cfWeekend" ${CFG.skipWeekend?'checked':''}> 1일차 날짜를 넣으면 다음 일차는 토·일요일을 건너뛰고 채우기</label></div></div>
+      <div class="field"><div class="fl">날짜 이어 채우기</div><div class="fc"><label class="gchk"><input type="checkbox" id="cfWeekend" ${CFG.skipWeekend?'checked':''}> 1일차 날짜를 넣으면 다음 일차는 토·일요일을 건너뛰고 채우기</label>
+         <label class="gchk"><input type="checkbox" id="cfHoliday" ${CFG.skipHoliday!==false?'checked':''}> 공휴일도 건너뛰기 <span class="hint" style="display:inline">(설·추석·성탄절·대체공휴일·선거일·노동절·제헌절 포함, 2025~2030년)</span></label>
+         <div style="margin-top:8px"><div class="hint" style="margin:0 0 4px">학교 쉬는 날(재량휴업일·개교기념일 등) — 날짜를 쉼표로, 이름은 괄호에. 예: <code>2026-12-24(재량휴업일), 2027-05-14(개교기념일)</code></div>
+         <input type="text" id="cfSchoolOff" style="width:100%;max-width:560px" value="${esc((CFG.schoolOff||[]).map(o=>o.d+(o.n?'('+o.n+')':'')).join(', '))}" placeholder="2026-12-24(재량휴업일), 2027-05-14(개교기념일)"></div></div></div>
     </section>
     <section class="setsec" id="set-common"><h2>공통·반별 지정 과목</h2>
       <div class="planline"><button type="button" class="btn" data-goplan="1">평가계획서에서 가져오기</button><span class="note" style="margin:0">${planItems().length?planStatusLine():'평가계획서(한글·워드·엑셀)를 올리면 아래 과목을 적지 않아도 자동으로 채워요.'}</span></div>
@@ -5764,6 +5798,10 @@ function wireSettings(app){
   document.querySelectorAll('[data-rpreset]').forEach(b=>b.onclick=()=>{ const pr=ROUND_PRESETS[+b.dataset.rpreset]; pr.forEach((nm,i)=>{ CFG.rounds[i]=nm; }); cfgChanged({rerender:true}); });
   $('cfPpd').onchange=e=>{ CFG.periodsPerDay=+e.target.value; cfgChanged({ppd:true}); };
   $('cfWeekend').onchange=e=>{ CFG.skipWeekend=e.target.checked; cfgChanged(); };
+  $('cfHoliday').onchange=e=>{ CFG.skipHoliday=e.target.checked; cfgChanged(); };
+  $('cfSchoolOff').onchange=e=>{ const r=parseSchoolOff(e.target.value); CFG.schoolOff=r.list; cfgChanged();
+    e.target.value=r.list.map(o=>o.d+(o.n?'('+o.n+')':'')).join(', ');
+    toast(r.bad.length?`날짜로 읽지 못한 것: <b>${r.bad.map(esc).join(', ')}</b> — 2026-12-24처럼 적어 주세요.`:`학교 쉬는 날 <b>${r.list.length}</b>일을 저장했어요.`, r.bad.length?6000:3000); };
   // 공통·반별 지정 과목
   document.querySelectorAll('#setGradeTabs [data-sg]').forEach(b=>b.onclick=()=>{ setGrade=b.dataset.sg; renderSettings(app); const el=$('set-common'); if(el) el.scrollIntoView({block:'start'}); });
   const addWhole=(key,raw)=>{ const [g,s]=parse(key); const names=String(raw).split(/[,，\n]/).map(x=>x.trim()).filter(Boolean); const w=CFG.common[g][s].whole; let n=0; names.forEach(nm=>{ if(!w.includes(nm)){ w.push(nm); n++; } }); return n; };
@@ -5976,9 +6014,10 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='s'
 window.addEventListener('beforeunload',e=>{ if(anyLoaded()&&dirty&&!GIDS.every(g=>!store[g]||store[g].isDemo)){ e.preventDefault(); e.returnValue=''; } });
 
 // 꼬리말: 왼쪽 학교명 / 오른쪽 버전·수정일 (버전을 누르면 변경 내역)
-const APP_VERSION='v2.41', APP_UPDATED='2026-11-04';
+const APP_VERSION='v2.42', APP_UPDATED='2026-11-04';
 // 변경 내역 — 업데이트할 때마다 맨 위에 새 항목을 추가하고 APP_VERSION·APP_UPDATED를 함께 고칠 것
 const APP_CHANGELOG=[
+  { v:'v2.42', d:'2026-11-04', items:['[시험 시간표] 1일차 날짜를 넣어 뒤 일차를 이어 채울 때 토·일요일만 건너뛰고 공휴일은 그대로 넣던 문제를 고쳤습니다. 설·추석·성탄절·대체공휴일·선거일·노동절·제헌절 등 공휴일(2025~2030년)을 건너뛰고, 무엇을 건너뛰었는지 알려 줍니다. 공휴일·주말에 걸린 일차는 날짜 옆에 빨갛게 표시합니다.','[학교 설정] 「공휴일도 건너뛰기」(기본 켬)와 「학교 쉬는 날」(재량휴업일·개교기념일 등 직접 적기)을 넣었습니다.']},
   { v:'v2.41', d:'2026-11-04', items:['[자료 올리기] 2학년 파일이 1학년으로 읽히면 ‘1학년 자료를 바꿀까요?’만 물어 올릴 수 없던 문제를 고쳤습니다. 이미 있는 학년으로 읽히면 「2학년으로 넣기」처럼 다른 학년을 바로 고를 수 있고, 무엇을 보고 그 학년으로 읽었는지(표·파일 이름·고른 칸)도 알려 줍니다.','[자료 올리기] 표에 학년이 없을 때는 고른 칸보다 파일 이름(예: ‘2학년 명렬표’)을 먼저 보고, 둘이 다르면 물어봅니다. ‘몇 학년 자료인가요?’ 창에서는 이미 올린 학년에 (이미 있음)을 붙이고 비어 있는 학년이 먼저 골라져 있습니다.']},
   { v:'v2.40', d:'2026-11-04', items:['[학생 확인(QR)] 웹 앱 코드 2026-11-04 g: 학교(구글 워크스페이스) 계정으로 배포하면 QR에 ‘…/a/macros/학교도메인/…’ 주소가 들어가 학교 계정으로 로그인하지 않은 휴대폰이 로그인 화면으로 갈 수 있었습니다. QR·담임 링크에 로그인 없이 열리는 일반 주소(…/macros/s/…)를 넣습니다.','[학생 확인(QR)] QR을 그리는 프로그램을 웹 앱 안에 넣어, 학교 인터넷이 외부 사이트를 막아도 QR이 나옵니다. 시험 담당 화면 QR 칸에 ‘휴대폰 시크릿 창으로 찍어 보기’ 안내를 넣었습니다. Code.gs·Page.html을 다시 붙여 넣고 새 버전으로 배포하세요.']},
   { v:'v2.39', d:'2026-11-03', items:['[새 버전 알림] 받아 둔 HTML 파일을 인터넷에 연결된 컴퓨터에서 열면 새 버전이 있는지 확인해, 있으면 맨 위에 알림 줄(바뀐 점 · 새 버전 받기 · 나중에)을 띄웁니다. 바닥글 「업데이트 확인」으로 언제든 확인할 수 있습니다. 버전 번호 파일 하나만 읽고, 학생 자료·학교 설정은 아무것도 보내지 않습니다.']},
