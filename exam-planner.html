@@ -3398,6 +3398,8 @@ function placeGrade(g,pt,fileName){
   store[g]={payload, students:parsed.students, fileName, isDemo:false, exam:initExam(payload), tt:{}, withdrawn:rm.wd, format:pt.format, notes:(parsed.notes||[]).slice()};
   return rm;
 }
+// '으로/로': 받침 있으면(ㄹ 빼고) 으로
+function euro(w){ const c=String(w).slice(-1).charCodeAt(0)-0xAC00; if(c<0||c>11171) return '로'; const j=c%28; return (j===0||j===8)?'로':'으로'; }
 async function loadFiles(files,target){
   const err=document.getElementById('err'); if(err) err.textContent='';
   const errs=[]; const done=[]; const notes=[];
@@ -3406,13 +3408,28 @@ async function loadFiles(files,target){
     try{ parts=await parseFileAny(f); }catch(ex){ errs.push(`${f.name}: ${ex.message}`); continue; }
     for(const pt of parts){
       if(!pt.payload.meta.students){ errs.push(`${f.name}: 학생을 찾지 못했습니다.`); continue; }
-      let g=pt.grade||target||detectGrade(f.name);
-      if(pt.grade && target && pt.grade!==target) notes.push(`${esc(f.name)}: 표의 학년 칸을 보고 <b>${pt.grade}학년</b>으로 넣었어요.`);
-      if(!g){ g=await askModal({title:'몇 학년 자료인가요?',html:`<b>${esc(f.name)}</b> · 학생 ${pt.payload.meta.students}명 · ${pt.payload.meta.classes}개 반<br>파일 이름이나 표에서 학년을 찾지 못했어요.`,buttons:[{label:'취소',value:null},...GRADES.map(x=>({label:x.label,value:x.id,primary:true}))]}); if(!g) continue; }
+      // 학년 정하기: 표(학년 칸·학번·반 '2-3'·제목) → 파일 이름 → 고른 학년 칸. 파일 이름과 고른 칸이 다르면 물어봄
+      const has=x=>!!(store[x]&&!store[x].isDemo);
+      const fg=detectGrade(f.name); const info=`<b>${esc(f.name)}</b> · 학생 ${pt.payload.meta.students}명 · ${pt.payload.meta.classes}개 반`;
+      const pick=(title,html)=>askModal({title,html,buttons:[{label:'취소',value:null},...GRADES.map(x=>({label:x.label+(has(x.id)?' (이미 있음)':''),value:x.id,primary:!has(x.id)}))]});
+      let g=null, why='';
+      if(pt.grade){ g=pt.grade; why='표의 학년 칸(또는 학번)'; if(target && pt.grade!==target) notes.push(`${esc(f.name)}: 표의 학년 칸을 보고 <b>${pt.grade}학년</b>으로 넣었어요.`); }
+      else if(fg && target && fg!==target){ g=await pick('몇 학년 자료인가요?',`${info}<br>파일 이름에는 <b>${fg}학년</b>, 고른 칸은 <b>${gInfo(target).label}</b>이에요. 맞는 학년을 골라 주세요.`); if(!g) continue; }
+      else if(fg){ g=fg; why='파일 이름'; }
+      else if(target){ g=target; why='고른 학년 칸'; }
+      if(!g){ g=await pick('몇 학년 자료인가요?',`${info}<br>파일 이름이나 표에서 학년을 찾지 못했어요.`); if(!g) continue; why=''; }
       if(GIDS.some(x=>store[x]&&store[x].isDemo)) exitDemo();
-      if(store[g] && !store[g].isDemo){
-        const ok=await askYesNo(`${gInfo(g).label} 자료를 바꿀까요?`,`이미 올린 <b>${esc(store[g].fileName||'자료')}</b>를 <b>${esc(f.name)}</b>로 바꿉니다. ${gInfo(g).label}에서 고친 내용(전입·자퇴·시간표·시험실)은 사라져요.`,'바꾸기');
-        if(!ok) continue; }
+      if(has(g)){
+        // 이미 그 학년이 있으면: 바꾸기만 묻지 않고, 다른 학년으로 넣을 수 있게
+        const lab=gInfo(g).label;
+        const v=await askModal({title:`${lab} 자료가 이미 있어요`,
+          html:`${info}<br>${why?`${why}을 보고 `:''}<b>${lab}</b> 자료로 읽었는데, 이미 올린 <b>${esc(store[g].fileName||'자료')}</b>가 있어요.<br><b>다른 학년 파일이면 그 학년을 고르세요.</b> ${lab} 자료를 바꾸면 ${lab}에서 고친 내용(전입·자퇴·시간표·시험실)은 사라져요.`,
+          buttons:[{label:'취소',value:null},...GRADES.filter(x=>x.id!==g).map(x=>({label:`${x.label}${euro(x.label)} 넣기${has(x.id)?' (바꾸기)':''}`,value:x.id,primary:!has(x.id)})),{label:`${lab} 자료 바꾸기`,value:g,danger:true}]});
+        if(!v) continue;
+        if(v!==g){
+          if(has(v) && !await askYesNo(`${gInfo(v).label} 자료를 바꿀까요?`,`이미 올린 <b>${esc(store[v].fileName||'자료')}</b>를 <b>${esc(f.name)}</b>로 바꿉니다. ${gInfo(v).label}에서 고친 내용(전입·자퇴·시간표·시험실)은 사라져요.`,'바꾸기')) continue;
+          if(pt.grade) notes.push(`${esc(f.name)}: 표에는 ${pt.grade}학년으로 적혀 있지만 고른 대로 <b>${gInfo(v).label}</b>${euro(gInfo(v).label)} 넣었어요.`);
+          g=v; } }
       const rm=placeGrade(g,pt,f.name); done.push(g);
       (pt.parsed.notes||[]).forEach(n=>notes.push(`${gInfo(g).label}: ${esc(n)}`));
       const bits=[rm.sp?`특수 ${rm.sp}명`:'',rm.wt?`위탁 ${rm.wt}명`:'',rm.wd.length?`자퇴·전출 ${rm.wd.length}명`:''].filter(Boolean);
@@ -5959,9 +5976,10 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='s'
 window.addEventListener('beforeunload',e=>{ if(anyLoaded()&&dirty&&!GIDS.every(g=>!store[g]||store[g].isDemo)){ e.preventDefault(); e.returnValue=''; } });
 
 // 꼬리말: 왼쪽 학교명 / 오른쪽 버전·수정일 (버전을 누르면 변경 내역)
-const APP_VERSION='v2.40', APP_UPDATED='2026-11-04';
+const APP_VERSION='v2.41', APP_UPDATED='2026-11-04';
 // 변경 내역 — 업데이트할 때마다 맨 위에 새 항목을 추가하고 APP_VERSION·APP_UPDATED를 함께 고칠 것
 const APP_CHANGELOG=[
+  { v:'v2.41', d:'2026-11-04', items:['[자료 올리기] 2학년 파일이 1학년으로 읽히면 ‘1학년 자료를 바꿀까요?’만 물어 올릴 수 없던 문제를 고쳤습니다. 이미 있는 학년으로 읽히면 「2학년으로 넣기」처럼 다른 학년을 바로 고를 수 있고, 무엇을 보고 그 학년으로 읽었는지(표·파일 이름·고른 칸)도 알려 줍니다.','[자료 올리기] 표에 학년이 없을 때는 고른 칸보다 파일 이름(예: ‘2학년 명렬표’)을 먼저 보고, 둘이 다르면 물어봅니다. ‘몇 학년 자료인가요?’ 창에서는 이미 올린 학년에 (이미 있음)을 붙이고 비어 있는 학년이 먼저 골라져 있습니다.']},
   { v:'v2.40', d:'2026-11-04', items:['[학생 확인(QR)] 웹 앱 코드 2026-11-04 g: 학교(구글 워크스페이스) 계정으로 배포하면 QR에 ‘…/a/macros/학교도메인/…’ 주소가 들어가 학교 계정으로 로그인하지 않은 휴대폰이 로그인 화면으로 갈 수 있었습니다. QR·담임 링크에 로그인 없이 열리는 일반 주소(…/macros/s/…)를 넣습니다.','[학생 확인(QR)] QR을 그리는 프로그램을 웹 앱 안에 넣어, 학교 인터넷이 외부 사이트를 막아도 QR이 나옵니다. 시험 담당 화면 QR 칸에 ‘휴대폰 시크릿 창으로 찍어 보기’ 안내를 넣었습니다. Code.gs·Page.html을 다시 붙여 넣고 새 버전으로 배포하세요.']},
   { v:'v2.39', d:'2026-11-03', items:['[새 버전 알림] 받아 둔 HTML 파일을 인터넷에 연결된 컴퓨터에서 열면 새 버전이 있는지 확인해, 있으면 맨 위에 알림 줄(바뀐 점 · 새 버전 받기 · 나중에)을 띄웁니다. 바닥글 「업데이트 확인」으로 언제든 확인할 수 있습니다. 버전 번호 파일 하나만 읽고, 학생 자료·학교 설정은 아무것도 보내지 않습니다.']},
   { v:'v2.38', d:'2026-11-03', items:['[학생 확인(QR)] 탭에 한눈에 보는 순서(설치 → 자료 올리기 → QR 안내 → 학생 확인·서명 → 명렬표)와 「📖 사용 매뉴얼」을 넣었습니다. 처음 한 번 설치 · 시험 담당 · 학생 · 담임 · 이상 있을 때 · 끝난 뒤를 탭으로 보고, 「매뉴얼 인쇄」로 A4 한 장에 뽑아 담임 선생님께 나눠 줄 수 있습니다.']},
