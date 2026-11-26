@@ -5475,7 +5475,7 @@ function runPrint(addClass, title, pageCss){
   try{ window.print(); }catch(e){}
   setTimeout(()=>{ window.removeEventListener('beforeprint',onBefore); cleanup(); if(framed&&!fired) printBlockedHelp(standalone,title); },framed?600:1600);
 }
-function inFrame(){ try{ return window.self!==window.top; }catch(e){ return true; } }
+function inFrame(){ if(window.__EP_HOSTED) return false; try{ return window.self!==window.top; }catch(e){ return true; } }
 // 인쇄할 부분만 담은 파일(열면 바로 인쇄 창이 뜸)
 function printStandaloneHtml(addClass,title,pageCss){
   const id=addClass==='printall'?'seatPrintAll':(addClass==='printroster'?'rosterPrintAll':'seatPrint');
@@ -6044,9 +6044,10 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='s'
 window.addEventListener('beforeunload',e=>{ if(anyLoaded()&&dirty&&!GIDS.every(g=>!store[g]||store[g].isDemo)){ e.preventDefault(); e.returnValue=''; } });
 
 // 꼬리말: 왼쪽 학교명 / 오른쪽 버전·수정일 (버전을 누르면 변경 내역)
-const APP_VERSION='v2.44', APP_UPDATED='2026-11-24';
+const APP_VERSION='v2.45', APP_UPDATED='2026-11-25';
 // 변경 내역 — 업데이트할 때마다 맨 위에 새 항목을 추가하고 APP_VERSION·APP_UPDATED를 함께 고칠 것
 const APP_CHANGELOG=[
+  { v:'v2.45', d:'2026-11-25', items:['[새 버전] 받아 둔 파일을 인터넷이 되는 컴퓨터에서 열면, 새 버전이 있을 때 버튼을 누르지 않아도 최신 버전으로 바로 열려요(학교 설정은 그대로). 파일을 연 뒤 바로 다른 것을 누르거나 자료를 올린 뒤라면 하던 일을 지키려고 알림 줄만 띄워요. 맨 위 줄에서 이 파일도 새 버전으로 받거나 자동 업데이트를 끌 수 있어요.']},
   { v:'v2.44', d:'2026-11-24', items:['[인쇄·배포] 감독 참고표가 날짜마다 B4 가로 한 장을 꽉 채웁니다. 인쇄와 같은 글꼴·크기로 미리 재서, 자리가 남으면 줄 높이를 늘려 표가 쪽 아래까지 내려오고, 교실·교시가 많으면 꼭 필요한 만큼만 줄여 한 장에 넣습니다(예전에는 실제보다 크게 재서 글자가 작아지고 아래가 30% 가까이 비었음).']},
   { v:'v2.43', d:'2026-11-05', items:['[인쇄·배포] 감독 참고표: 맨 아래 ‘시험실 수’에서 특수학급 교실을 뺐습니다(정감독 인원 그대로). 그 아래에 ‘부감독 수’ 줄을 더해, 교시마다 학교 설정의 기준 인원을 넘는 교실(‘부감독’ 표시가 붙은 교실)이 몇 개인지 셉니다.','[인쇄] 감독 참고표가 날짜마다 B4 가로 한 장에 꼭 들어가게, 표의 높이뿐 아니라 너비도 재서 넘치면 줄여 뽑습니다(교실이 많은 학교도 두 장으로 넘어가거나 오른쪽이 잘리지 않음).']},
   { v:'v2.42', d:'2026-11-04', items:['[시험 시간표] 1일차 날짜를 넣어 뒤 일차를 이어 채울 때 토·일요일만 건너뛰고 공휴일은 그대로 넣던 문제를 고쳤습니다. 설·추석·성탄절·대체공휴일·선거일·노동절·제헌절 등 공휴일(2025~2030년)을 건너뛰고, 무엇을 건너뛰었는지 알려 줍니다. 공휴일·주말에 걸린 일차는 날짜 옆에 빨갛게 표시합니다.','[학교 설정] 「공휴일도 건너뛰기」(기본 켬)와 「학교 쉬는 날」(재량휴업일·개교기념일 등 직접 적기)을 넣었습니다.']},
@@ -6267,34 +6268,85 @@ async function getNewVersion(j,btn){
   if(btn){ btn.disabled=false; btn.textContent='새 버전 받기'; }
   const pg=safeUrl(j.page); if(pg){ window.open(pg,'_blank','noopener'); toast('바로 받지 못해 안내 페이지를 열었어요. 거기서 <b>exam-planner.html</b>을 받아 주세요.',7000); }
   else toast('새 버전을 받지 못했어요. 잠시 뒤 다시 해 주세요.',5000); }
+// ----- 자동 업데이트: 받아 둔 파일을 열 때 새 버전이 있으면 그 자리에서 최신판으로 엶 -----
+// 최신판은 같은 출처의 iframe(srcdoc)에서 돌아가므로 이 컴퓨터의 학교 설정(localStorage)을 그대로 씀. 파일 자체는 바뀌지 않음(브라우저가 막음).
+// 파일을 연 뒤 사용자가 이미 무언가를 눌렀거나 자료가 있으면 하던 일을 지키려고 바꾸지 않고 알림 줄만.
+const EP_HOSTED=window.__EP_HOSTED||null;   // 자동 업데이트로 연 최신판이면 {from:'받아 둔 파일 버전', ver}
+function autoUpdOn(){ return updPref('autoUpdate')!=='off'; }
+let updActed=false;
+['pointerdown','keydown','dragenter','drop'].forEach(t=>window.addEventListener(t,()=>{ updActed=true; },{capture:true}));
+function htmlVer(html){ const m=String(html).match(/const APP_VERSION='(v\d+(?:\.\d+)*)'/); return m?m[1]:''; }
+async function fetchLatestHtml(j){
+  const file=String(j.file||'exam-planner.html').replace(/[^\w.\-]/g,'');
+  for(const base of [updBase].concat(UPDATE_BASES.filter(b=>b!==updBase))){ if(!base) continue;
+    try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),20000);
+      const r=await fetch(base+file+'?t='+Math.floor(Date.now()/600000),{cache:'no-store',signal:c.signal}); clearTimeout(t); if(!r.ok) continue;
+      const html=await r.text(); const v=htmlVer(html);
+      // 덜 받았거나 엉뚱한 파일, 지금보다 새것이 아닌 파일(캐시가 늦은 경우)은 쓰지 않음
+      if(html.length<1000000 || html.indexOf('정기시험 편성 도우미')<0 || !v || !verNewer(v,APP_VERSION)) continue;
+      return {html, ver:v}; }catch(e){} }
+  return null; }
+function hostLatest(got){
+  if(document.getElementById('epLatest')) return true;
+  const mark=`<script>window.__EP_HOSTED=${JSON.stringify({from:APP_VERSION, ver:got.ver})};<\/script>`;
+  const html=/<head[^>]*>/i.test(got.html)?got.html.replace(/<head[^>]*>/i,m=>m+mark):mark+got.html;
+  const f=document.createElement('iframe'); f.id='epLatest'; f.title=APP_NAME+' '+got.ver;
+  f.setAttribute('allow','clipboard-read; clipboard-write; fullscreen');
+  f.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;padding:0;z-index:2147483647;background:#fff;';
+  f.onload=()=>{ try{ document.title=f.contentDocument.title||document.title; }catch(e){}
+    [...document.body.children].forEach(el=>{ if(el!==f) el.style.display='none'; });
+    document.documentElement.style.overflow='hidden'; document.body.style.overflow='hidden';
+    try{ f.contentWindow.focus(); }catch(e){} };
+  f.srcdoc=html; document.body.appendChild(f);
+  return true; }
 async function checkUpdate(manual){
   if(ART){ if(manual) toast('이 화면(아티팩트)은 늘 최신 버전이에요.'); return; }
   if(UPDATE_REPO.indexOf('__')===0){ if(manual) toast('업데이트 확인 주소가 아직 정해지지 않았어요.'); return; }
-  if(!manual && updPref('updates')==='off') return;
+  if(!manual && updPref('updates')==='off'){ if(EP_HOSTED) showHostedBar(); return; }
   const j=await fetchLatest();
-  if(!j){ if(manual) toast('새 버전을 확인하지 못했어요. 인터넷에 연결돼 있는지 확인해 주세요.',4500); return; }
-  if(!verNewer(j.version,APP_VERSION)){ if(manual) toast(`지금 쓰는 <b>${esc(APP_VERSION)}</b>${iga(APP_VERSION)} 최신 버전이에요.`); return; }
+  if(!j){ if(manual) toast('새 버전을 확인하지 못했어요. 인터넷에 연결돼 있는지 확인해 주세요.',4500); else if(EP_HOSTED) showHostedBar(); return; }
+  if(!verNewer(j.version,APP_VERSION)){ if(manual) toast(`지금 쓰는 <b>${esc(APP_VERSION)}</b>${iga(APP_VERSION)} 최신 버전이에요.`); else if(EP_HOSTED) showHostedBar(); return; }
+  // 받아 둔 파일: 아직 아무것도 하지 않았으면 최신판으로 바로 엶
+  if(!manual && !EP_HOSTED && autoUpdOn()){
+    const got=await fetchLatestHtml(j);
+    if(got && !updActed && !anyLoaded() && hostLatest(got)) return;
+    if(got){ showUpdateBar(j,got); return; } }
   if(!manual && updPref('skipVer')===String(j.version)) return;
   showUpdateBar(j); }
+// 최신판 맨 위: 받아 둔 파일 버전 알림 + 이 파일도 새로 받기 / 자동 업데이트 끄기
+function showHostedBar(){
+  if(!EP_HOSTED || document.getElementById('updBar')) return;
+  const bar=document.createElement('div'); bar.id='updBar'; bar.className='updbar noprint'; bar.setAttribute('role','status');
+  bar.innerHTML=`<span class="updic" aria-hidden="true">✨</span><span class="updtx">최신 버전 <b>${esc(APP_VERSION)}</b>(으)로 열었어요 · 받아 둔 파일은 ${esc(EP_HOSTED.from)} <span class="upddt">(학교 설정은 그대로예요)</span></span>
+    <span class="updbtns"><button type="button" class="btn sm primary" id="updGetSelf">이 파일도 새 버전으로 받기</button><button type="button" class="btn sm" id="updAutoOff">자동 업데이트 끄기</button><button type="button" class="btn sm" id="updClose" aria-label="닫기">닫기</button></span>`;
+  document.body.prepend(bar);
+  document.getElementById('updGetSelf').onclick=e=>getNewVersion({version:APP_VERSION, file:'exam-planner.html', page:`https://github.com/${UPDATE_REPO}`}, e.currentTarget);
+  document.getElementById('updAutoOff').onclick=()=>{ updPref('autoUpdate','off'); bar.remove();
+    toast('자동 업데이트를 껐어요. 다음부터는 받아 둔 파일 그대로 열고, 새 버전이 있으면 알림 줄만 띄워요.',6000); };
+  document.getElementById('updClose').onclick=()=>bar.remove(); }
 function safeUrl(u){ u=String(u||''); return /^https:\/\//i.test(u)?u:''; }
-function showUpdateBar(j){
+function showUpdateBar(j,got){
   const old=document.getElementById('updBar'); if(old) old.remove();
   const pg=safeUrl(j.page);
   const bar=document.createElement('div'); bar.id='updBar'; bar.className='updbar noprint'; bar.setAttribute('role','status');
   bar.innerHTML=`<span class="updic" aria-hidden="true">🔔</span><span class="updtx">새 버전 <b>${esc(j.version)}</b>${iga(j.version)} 나왔어요${j.date?` <span class="upddt">(${esc(j.date)})</span>`:''} · 지금은 ${esc(APP_VERSION)}</span>
-    <span class="updbtns">${(j.notes&&j.notes.length)?'<button type="button" class="btn sm" id="updNotes">바뀐 점</button>':''}<button type="button" class="btn sm primary" id="updGet">새 버전 받기</button><button type="button" class="btn sm" id="updLater">나중에</button></span>`;
+    <span class="updbtns">${(j.notes&&j.notes.length)?'<button type="button" class="btn sm" id="updNotes">바뀐 점</button>':''}${got?'<button type="button" class="btn sm primary" id="updOpen">지금 새 버전으로 열기</button>':''}<button type="button" class="btn sm${got?'':' primary'}" id="updGet">새 버전 받기</button>${autoUpdOn()?'':'<button type="button" class="btn sm" id="updAutoOn">다음부터 자동으로 열기</button>'}<button type="button" class="btn sm" id="updLater">나중에</button></span>`;
   document.body.prepend(bar);
   const n=document.getElementById('updNotes'); if(n) n.onclick=()=>askModal({title:`${esc(j.version)}에서 바뀐 점`,
     html:`<ul class="updlist">${(j.notes||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>${pg?`<p class="note" style="margin:8px 0 0"><a href="${esc(pg)}" target="_blank" rel="noopener">자세한 안내 보기</a></p>`:''}
       <p class="note" style="margin:10px 0 0">새 파일을 받아 열면 돼요. 지금 하던 작업은 <b>작업 저장</b>으로 저장해 두었다가 새 파일에서 <b>작업 불러오기</b>로 이어서 하세요.</p>`,
     buttons:[{label:'닫기',value:true}]});
   const g=document.getElementById('updGet'); if(g) g.onclick=()=>getNewVersion(j,g);
+  const o=document.getElementById('updOpen'); if(o) o.onclick=async()=>{
+    if(anyLoaded() && dirty && !(await askYesNo('새 버전으로 열까요?','지금 하던 작업은 새 버전 화면에 이어지지 않아요. 먼저 <b>작업 저장</b>을 해 두고, 새 버전에서 <b>작업 불러오기</b>로 이어서 하세요.','저장 안 하고 열기','취소'))) return;
+    hostLatest(got); };
+  const ao=document.getElementById('updAutoOn'); if(ao) ao.onclick=()=>{ updPref('autoUpdate','on'); ao.remove(); toast('다음부터 새 버전이 있으면 바로 최신 버전으로 열어요.',5000); };
   document.getElementById('updLater').onclick=()=>{ updPref('skipVer',String(j.version)); bar.remove(); toast('이 버전 알림은 다시 띄우지 않아요. 바닥글의 <b>업데이트 확인</b>으로 언제든 볼 수 있어요.',5000); };
 }
 (function(){ const r=document.querySelector('#appFooter .ftR'); if(!r||ART) return;
   const vb=document.getElementById('verBtn'); const b=document.createElement('button'); b.type='button'; b.className='skinbtn'; b.id='updBtn'; b.textContent='업데이트 확인';
   b.onclick=()=>checkUpdate(true); r.insertBefore(b, vb);
-  setTimeout(()=>checkUpdate(false), 2500);
+  setTimeout(()=>checkUpdate(false), 300);
 })();
 // ===================== 평가계획서 → 시험 과목·공통과목·담당교사 =====================
 // CFG.plan.items: {g, sem, name, key, kind:'whole'|'class'|'elective'|'none', classes[], exam:{'1':true|false|null,'2':…}, anyRound,
